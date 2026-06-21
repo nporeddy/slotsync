@@ -20,19 +20,6 @@ app.get("/health", async (_req, res) => {
   }
 });
 
-// Temporary Day 3 test route — proves Prisma can write + read
-app.get("/test-prisma", async (_req, res) => {
-  const user = await prisma.user.create({
-    data: {
-      email: `test-${Date.now()}@example.com`,
-      password: "placeholder",
-      role: "PROVIDER",
-    },
-  });
-  const count = await prisma.user.count();
-  res.json({ created: user, totalUsers: count });
-});
-
 async function start() {
   await pool.query("SELECT 1");
   console.log("✅ Postgres connected");
