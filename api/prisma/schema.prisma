@@ -7,38 +7,118 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  role      Role     @default(CUSTOMER)
-  provider  Provider?
-  createdAt DateTime @default(now())
-}
-
 enum Role {
   CUSTOMER
   PROVIDER
 }
 
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  REQUIRES_PAYMENT
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  role      Role      @default(CUSTOMER)
+  provider  Provider?
+  bookings  Booking[]
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+}
+
 model Provider {
-  id           String    @id @default(cuid())
-  userId       String    @unique
-  user         User      @relation(fields: [userId], references: [id])
-  displayName  String
-  slug         String    @unique        // for slotsync.com/dr-smith
-  timezone     String                   // IANA string, e.g. "America/New_York"
-  services     Service[]
-  createdAt    DateTime  @default(now())
+  id          String                  @id @default(cuid())
+  userId      String                  @unique
+  user        User                    @relation(fields: [userId], references: [id])
+  displayName String
+  slug        String                  @unique // for slotsync.com/dr-smith
+  timezone    String                          // IANA tz, e.g. "America/New_York"
+  services    Service[]
+  rules       AvailabilityRule[]
+  exceptions  AvailabilityException[]
+  bookings    Booking[]
+  createdAt   DateTime                @default(now()) @db.Timestamptz(3)
 }
 
 model Service {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   providerId      String
-  provider        Provider @relation(fields: [providerId], references: [id])
+  provider        Provider  @relation(fields: [providerId], references: [id])
   name            String
   durationMinutes Int
-  priceCents      Int                    // store money as integer cents, never floats
-  depositCents    Int      @default(0)
-  createdAt       DateTime @default(now())
+  priceCents      Int                 // money as integer cents, never floats
+  depositCents    Int       @default(0)
+  bookings        Booking[]
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+}
+
+model AvailabilityRule {
+  id          String   @id @default(cuid())
+  providerId  String
+  provider    Provider @relation(fields: [providerId], references: [id])
+  dayOfWeek   Int                 // 0 = Sunday ... 6 = Saturday
+  startMinute Int                 // minutes from midnight, in the provider's LOCAL time
+  endMinute   Int
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([providerId])
+}
+
+model AvailabilityException {
+  id         String   @id @default(cuid())
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id])
+  startTime  DateTime @db.Timestamptz(3) // a blocked period, stored in UTC
+  endTime    DateTime @db.Timestamptz(3)
+  reason     String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([providerId])
+}
+
+model Booking {
+  id         String        @id @default(cuid())
+  providerId String
+  provider   Provider      @relation(fields: [providerId], references: [id])
+  serviceId  String
+  service    Service       @relation(fields: [serviceId], references: [id])
+  customerId String
+  customer   User          @relation(fields: [customerId], references: [id])
+  startTime  DateTime      @db.Timestamptz(3) // UTC
+  endTime    DateTime      @db.Timestamptz(3) // UTC
+  status     BookingStatus @default(PENDING)
+  payment    Payment?
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([providerId, startTime])
+  @@index([customerId])
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  bookingId             String        @unique
+  booking               Booking       @relation(fields: [bookingId], references: [id])
+  stripePaymentIntentId String?       @unique
+  amountCents           Int
+  currency              String        @default("usd")
+  status                PaymentStatus @default(REQUIRES_PAYMENT)
+  createdAt             DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime      @updatedAt @db.Timestamptz(3)
+}
+
+model WebhookEvent {
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique // idempotency key — dedupes Stripe's re-deliveries
+  type          String
+  receivedAt    DateTime @default(now()) @db.Timestamptz(3)
 }
