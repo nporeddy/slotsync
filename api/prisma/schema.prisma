@@ -40,8 +40,8 @@ model Provider {
   userId      String                  @unique
   user        User                    @relation(fields: [userId], references: [id])
   displayName String
-  slug        String                  @unique // for slotsync.com/dr-smith
-  timezone    String                          // IANA tz, e.g. "America/New_York"
+  slug        String                  @unique 
+  timezone    String                          
   services    Service[]
   rules       AvailabilityRule[]
   exceptions  AvailabilityException[]
@@ -55,7 +55,7 @@ model Service {
   provider        Provider  @relation(fields: [providerId], references: [id])
   name            String
   durationMinutes Int
-  priceCents      Int                 // money as integer cents, never floats
+  priceCents      Int                 
   depositCents    Int       @default(0)
   bookings        Booking[]
   createdAt       DateTime  @default(now()) @db.Timestamptz(3)
@@ -65,8 +65,8 @@ model AvailabilityRule {
   id          String   @id @default(cuid())
   providerId  String
   provider    Provider @relation(fields: [providerId], references: [id])
-  dayOfWeek   Int                 // 0 = Sunday ... 6 = Saturday
-  startMinute Int                 // minutes from midnight, in the provider's LOCAL time
+  dayOfWeek   Int                
+  startMinute Int               
   endMinute   Int
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
@@ -77,7 +77,7 @@ model AvailabilityException {
   id         String   @id @default(cuid())
   providerId String
   provider   Provider @relation(fields: [providerId], references: [id])
-  startTime  DateTime @db.Timestamptz(3) // a blocked period, stored in UTC
+  startTime  DateTime @db.Timestamptz(3) 
   endTime    DateTime @db.Timestamptz(3)
   reason     String?
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
@@ -118,7 +118,7 @@ model Payment {
 
 model WebhookEvent {
   id            String   @id @default(cuid())
-  stripeEventId String   @unique // idempotency key — dedupes Stripe's re-deliveries
+  stripeEventId String   @unique 
   type          String
   receivedAt    DateTime @default(now()) @db.Timestamptz(3)
 }
