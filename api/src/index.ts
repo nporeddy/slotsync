@@ -1,7 +1,8 @@
-import 'dotenv/config';
+import "dotenv/config";
 import express from "express";
 import { Pool } from "pg";
 import Redis from "ioredis";
+import { prisma } from "./prisma";
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;
@@ -17,6 +18,19 @@ app.get("/health", async (_req, res) => {
   } catch (err) {
     res.status(500).json({ status: "error", error: String(err) });
   }
+});
+
+// Temporary Day 3 test route — proves Prisma can write + read
+app.get("/test-prisma", async (_req, res) => {
+  const user = await prisma.user.create({
+    data: {
+      email: `test-${Date.now()}@example.com`,
+      password: "placeholder",
+      role: "PROVIDER",
+    },
+  });
+  const count = await prisma.user.count();
+  res.json({ created: user, totalUsers: count });
 });
 
 async function start() {
