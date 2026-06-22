@@ -3,8 +3,11 @@ import express from "express";
 import { Pool } from "pg";
 import Redis from "ioredis";
 import { prisma } from "./prisma";
+import { authRouter } from './routes/auth';
+
 
 const app = express();
+app.use(express.json());
 const PORT = process.env.PORT ?? 4000;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -19,6 +22,8 @@ app.get("/health", async (_req, res) => {
     res.status(500).json({ status: "error", error: String(err) });
   }
 });
+
+app.use('/auth', authRouter);
 
 async function start() {
   await pool.query("SELECT 1");

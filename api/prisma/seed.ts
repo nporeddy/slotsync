@@ -1,26 +1,21 @@
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "../src/lib/auth";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const pw = await hashPassword("password123");
+
   const providerUser = await prisma.user.upsert({
     where: { email: "dr-smith@example.com" },
-    update: {},
-    create: {
-      email: "dr-smith@example.com",
-      password: "placeholder",
-      role: "PROVIDER",
-    },
+    update: { password: pw },
+    create: { email: "dr-smith@example.com", password: pw, role: "PROVIDER" },
   });
 
   await prisma.user.upsert({
     where: { email: "customer@example.com" },
-    update: {},
-    create: {
-      email: "customer@example.com",
-      password: "placeholder",
-      role: "CUSTOMER",
-    },
+    update: { password: pw },
+    create: { email: "customer@example.com", password: pw, role: "CUSTOMER" },
   });
 
   const provider = await prisma.provider.upsert({
@@ -58,7 +53,6 @@ async function main() {
     ],
   });
 
-
   await prisma.availabilityRule.createMany({
     data: [1, 2, 3, 4, 5].map((dayOfWeek) => ({
       providerId: provider.id,
@@ -68,7 +62,11 @@ async function main() {
     })),
   });
 
-  console.log("✅ Seed complete — provider:", provider.slug);
+  console.log(
+    "✅ Seed complete — provider:",
+    provider.slug,
+    "| login: dr-smith@example.com / password123",
+  );
 }
 
 main()

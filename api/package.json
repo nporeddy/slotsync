@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
-"test:watch": "vitest"
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -16,13 +16,17 @@
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "ioredis": "^5.11.1",
+    "jsonwebtoken": "^9.0.3",
     "pg": "^8.22.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.0.0",
     "@types/pg": "^8.20.0",
     "prisma": "^6.19.3",
