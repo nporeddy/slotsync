@@ -1,4 +1,3 @@
-// Convert minutes-from-midnight (how we store availability) into "HH:MM"
 export function minutesToHHMM(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
