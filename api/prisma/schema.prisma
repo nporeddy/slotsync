@@ -40,13 +40,25 @@ model Provider {
   userId      String                  @unique
   user        User                    @relation(fields: [userId], references: [id])
   displayName String
-  slug        String                  @unique 
-  timezone    String                          
+  slug        String                  @unique
+  timezone    String
   services    Service[]
+  resources   Resource[]
   rules       AvailabilityRule[]
   exceptions  AvailabilityException[]
   bookings    Booking[]
   createdAt   DateTime                @default(now()) @db.Timestamptz(3)
+}
+
+model Resource {
+  id         String        @id @default(cuid())
+  providerId String
+  provider   Provider      @relation(fields: [providerId], references: [id])
+  name       String                 // e.g. "Room 1", "Chair A", "Seat 14F"
+  units      BookingUnit[]
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([providerId])
 }
 
 model Service {
@@ -55,7 +67,7 @@ model Service {
   provider        Provider  @relation(fields: [providerId], references: [id])
   name            String
   durationMinutes Int
-  priceCents      Int                 
+  priceCents      Int
   depositCents    Int       @default(0)
   bookings        Booking[]
   createdAt       DateTime  @default(now()) @db.Timestamptz(3)
@@ -65,8 +77,8 @@ model AvailabilityRule {
   id          String   @id @default(cuid())
   providerId  String
   provider    Provider @relation(fields: [providerId], references: [id])
-  dayOfWeek   Int                
-  startMinute Int               
+  dayOfWeek   Int
+  startMinute Int
   endMinute   Int
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
@@ -77,7 +89,7 @@ model AvailabilityException {
   id         String   @id @default(cuid())
   providerId String
   provider   Provider @relation(fields: [providerId], references: [id])
-  startTime  DateTime @db.Timestamptz(3) 
+  startTime  DateTime @db.Timestamptz(3)
   endTime    DateTime @db.Timestamptz(3)
   reason     String?
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
@@ -86,22 +98,39 @@ model AvailabilityException {
 }
 
 model Booking {
-  id         String        @id @default(cuid())
-  providerId String
-  provider   Provider      @relation(fields: [providerId], references: [id])
-  serviceId  String
-  service    Service       @relation(fields: [serviceId], references: [id])
-  customerId String
-  customer   User          @relation(fields: [customerId], references: [id])
-  startTime  DateTime      @db.Timestamptz(3) // UTC
-  endTime    DateTime      @db.Timestamptz(3) // UTC
-  status     BookingStatus @default(PENDING)
-  payment    Payment?
-  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt  DateTime      @updatedAt @db.Timestamptz(3)
+  id            String        @id @default(cuid())
+  providerId    String
+  provider      Provider      @relation(fields: [providerId], references: [id])
+  serviceId     String
+  service       Service       @relation(fields: [serviceId], references: [id])
+  customerId    String
+  customer      User          @relation(fields: [customerId], references: [id])
+  startTime     DateTime      @db.Timestamptz(3)
+  endTime       DateTime      @db.Timestamptz(3)
+  status        BookingStatus @default(PENDING)
+  holdExpiresAt DateTime?     @db.Timestamptz(3)   // for the seat-lock / hold expiry (Day 22)
+  units         BookingUnit[]
+  payment       Payment?
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(3)
 
   @@index([providerId, startTime])
   @@index([customerId])
+}
+
+model BookingUnit {
+  id         String        @id @default(cuid())
+  bookingId  String
+  booking    Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  resourceId String
+  resource   Resource      @relation(fields: [resourceId], references: [id])
+  startTime  DateTime      @db.Timestamptz(3)      // denormalized so the DB constraint is self-contained
+  endTime    DateTime      @db.Timestamptz(3)
+  status     BookingStatus @default(PENDING)       // mirrors the order; the EXCLUDE constraint reads this
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([bookingId])
+  @@index([resourceId, startTime])
 }
 
 model Payment {
@@ -118,7 +147,7 @@ model Payment {
 
 model WebhookEvent {
   id            String   @id @default(cuid())
-  stripeEventId String   @unique 
+  stripeEventId String   @unique
   type          String
   receivedAt    DateTime @default(now()) @db.Timestamptz(3)
 }

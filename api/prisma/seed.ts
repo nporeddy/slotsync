@@ -33,6 +33,7 @@ async function main() {
   await prisma.availabilityRule.deleteMany({
     where: { providerId: provider.id },
   });
+  await prisma.resource.deleteMany({ where: { providerId: provider.id } });
 
   await prisma.service.createMany({
     data: [
@@ -53,6 +54,13 @@ async function main() {
     ],
   });
 
+  await prisma.resource.createMany({
+    data: ["Room 1", "Room 2", "Room 3"].map((name) => ({
+      providerId: provider.id,
+      name,
+    })),
+  });
+
   await prisma.availabilityRule.createMany({
     data: [1, 2, 3, 4, 5].map((dayOfWeek) => ({
       providerId: provider.id,
@@ -62,11 +70,7 @@ async function main() {
     })),
   });
 
-  console.log(
-    "✅ Seed complete — provider:",
-    provider.slug,
-    "| login: dr-smith@example.com / password123",
-  );
+  console.log("✅ Seed complete — provider: dr-smith, 3 resources, 2 services");
 }
 
 main()
