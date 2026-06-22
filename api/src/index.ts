@@ -5,9 +5,10 @@ import Redis from "ioredis";
 import { prisma } from "./prisma";
 import { authRouter } from './routes/auth';
 import { providerRouter } from './routes/provider';
-
+import cors from 'cors';
 
 const app = express();
+app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json());
 const PORT = process.env.PORT ?? 4000;
 
