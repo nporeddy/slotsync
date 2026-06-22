@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import Redis from "ioredis";
 import { prisma } from "./prisma";
 import { authRouter } from './routes/auth';
+import { providerRouter } from './routes/provider';
 
 
 const app = express();
@@ -24,6 +25,7 @@ app.get("/health", async (_req, res) => {
 });
 
 app.use('/auth', authRouter);
+app.use('/provider', providerRouter);
 
 async function start() {
   await pool.query("SELECT 1");
