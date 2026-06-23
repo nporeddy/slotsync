@@ -89,25 +89,45 @@ export function sliceIntoSlots(
 
   return slots;
 }
-
-// Step 3: drop candidate slots that overlap a one-off exception window.
 export function subtractExceptions(
   slots: TimeWindow[],
   exceptions: TimeWindow[],
 ): TimeWindow[] {
-  throw new Error('not implemented (Day 15)');
-}
+  if (exceptions.length === 0) return slots;
 
-// Step 4: for each slot, count resources with no overlapping busy interval.
+  return slots.filter((slot) => {
+    // Keep the slot only if it overlaps NONE of the exceptions.
+    const hitsAnException = exceptions.some(
+      (ex) => slot.start < ex.end && slot.end > ex.start,
+    );
+    return !hitsAnException;
+  });
+}
 export function computeCapacity(
   slots: TimeWindow[],
   resourceIds: string[],
   busy: BusyInterval[],
 ): AvailableSlot[] {
-  throw new Error('not implemented (Day 15)');
+  const result: AvailableSlot[] = [];
+
+  for (const slot of slots) {
+    // A resource is free for this slot if NONE of its busy intervals overlap it.
+    const freeCount = resourceIds.filter((resourceId) => {
+      const busyForThisResource = busy.filter((b) => b.resourceId === resourceId);
+      const isTaken = busyForThisResource.some(
+        (b) => slot.start < b.end && slot.end > b.start,
+      );
+      return !isTaken;
+    }).length;
+
+    if (freeCount > 0) {
+      result.push({ start: slot.start, end: slot.end, capacity: freeCount });
+    }
+  }
+
+  return result;
 }
 
-// The orchestrator that runs the whole pipeline (wires the above together).
 export function computeAvailability(input: {
   rules: WeeklyRule[];
   timezone: string;
@@ -118,5 +138,13 @@ export function computeAvailability(input: {
   resourceIds: string[];
   busy: BusyInterval[];
 }): AvailableSlot[] {
-  throw new Error('not implemented (Day 15)');
+  const windows = expandRulesToWindows(
+    input.rules,
+    input.timezone,
+    input.rangeStart,
+    input.rangeEnd,
+  );
+  const slots = sliceIntoSlots(windows, input.durationMinutes);
+  const open = subtractExceptions(slots, input.exceptions);
+  return computeCapacity(open, input.resourceIds, input.busy);
 }
