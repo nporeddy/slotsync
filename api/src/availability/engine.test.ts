@@ -168,3 +168,125 @@ describe('computeAvailability — full pipeline', () => {
     expect(out[1].capacity).toBe(3);    // second slot: all free
   });
 });
+
+describe('DST transition days (US Eastern 2026)', () => {
+  // Sunday rule so the transition Sundays match. Sunday = dayOfWeek 0.
+  const sunRule: WeeklyRule = { dayOfWeek: 0, startMinute: 540, endMinute: 1020 };
+  const NY = 'America/New_York';
+
+  it('spring-forward Sunday (Mar 8): 9am local is still EST→EDT-correct', () => {
+    const w = expandRulesToWindows(
+      [sunRule], NY,
+      new Date('2026-03-08T12:00:00Z'),
+      new Date('2026-03-08T12:00:00Z'),
+    );
+    expect(w).toHaveLength(1);
+    // 9am on Mar 8 is AFTER the 2am jump → already EDT (UTC-4) → 13:00 UTC.
+    expect(w[0].start.toISOString()).toBe('2026-03-08T13:00:00.000Z');
+    // Window is still a normal 8 hours (the jump was at 2am, far from 9–5).
+    const hours = (w[0].end.getTime() - w[0].start.getTime()) / 3_600_000;
+    expect(hours).toBe(8);
+  });
+
+  it('fall-back Sunday (Nov 1): 9am local resolves correctly to EST', () => {
+    const w = expandRulesToWindows(
+      [sunRule], NY,
+      new Date('2026-11-01T12:00:00Z'),
+      new Date('2026-11-01T12:00:00Z'),
+    );
+    expect(w).toHaveLength(1);
+    // 9am on Nov 1 is AFTER the 2am fall-back → EST (UTC-5) → 14:00 UTC.
+    expect(w[0].start.toISOString()).toBe('2026-11-01T14:00:00.000Z');
+    const hours = (w[0].end.getTime() - w[0].start.getTime()) / 3_600_000;
+    expect(hours).toBe(8); // still 8 hours of wall-clock work
+  });
+});
+
+describe('split shift — two rules on the same day', () => {
+  const NY = 'America/New_York';
+  const morning: WeeklyRule = { dayOfWeek: 3, startMinute: 540, endMinute: 720 };  // 9:00–12:00
+  const afternoon: WeeklyRule = { dayOfWeek: 3, startMinute: 780, endMinute: 1020 }; // 13:00–17:00
+
+  it('produces two windows with a gap between them', () => {
+    const w = expandRulesToWindows(
+      [morning, afternoon], NY,
+      new Date('2026-07-01T12:00:00Z'),
+      new Date('2026-07-01T12:00:00Z'),
+    );
+    expect(w).toHaveLength(2);
+  });
+
+  it('slicing the split shift yields 6 + 8 = 14 half-hour slots, none over lunch', () => {
+    const w = expandRulesToWindows(
+      [morning, afternoon], NY,
+      new Date('2026-07-01T12:00:00Z'),
+      new Date('2026-07-01T12:00:00Z'),
+    );
+    const slots = sliceIntoSlots(w, 30);
+    expect(slots).toHaveLength(14); // 3h→6 + 4h→8; the 12–1 lunch gap has none
+    // No slot should start during lunch (16:00–17:00 UTC = 12:00–13:00 local EDT).
+    const lunchSlot = slots.find(
+      (s) => s.start.toISOString() === '2026-07-01T16:00:00.000Z',
+    );
+    expect(lunchSlot).toBeUndefined();
+  });
+});
+
+describe('non-dividing duration', () => {
+  const wedRule: WeeklyRule = { dayOfWeek: 3, startMinute: 540, endMinute: 1020 };
+  it('45-min service in an 8h day → 10 full slots, no partial tail', () => {
+    const w = expandRulesToWindows(
+      [wedRule], 'America/New_York',
+      new Date('2026-07-01T12:00:00Z'),
+      new Date('2026-07-01T12:00:00Z'),
+    );
+    const slots = sliceIntoSlots(w, 45);
+    expect(slots).toHaveLength(10); // floor(480 / 45)
+    // Last slot must end at or before 21:00 UTC (5pm local) — never overrun.
+    const lastEnd = slots[slots.length - 1].end.getTime();
+    expect(lastEnd).toBeLessThanOrEqual(new Date('2026-07-01T21:00:00Z').getTime());
+  });
+});
+
+describe('capacity — partial and staggered overlaps', () => {
+  const slot: TimeWindow[] = [
+    { start: new Date('2026-07-01T13:00:00Z'), end: new Date('2026-07-01T13:30:00Z') },
+  ];
+  const rooms = ['r1', 'r2', 'r3'];
+
+  it('a booking that only partially overlaps still consumes the room', () => {
+    // Booked 13:15–13:45 — overlaps the 13:00–13:30 slot by 15 min → r1 is taken.
+    const busy: BusyInterval[] = [
+      { resourceId: 'r1', start: new Date('2026-07-01T13:15:00Z'), end: new Date('2026-07-01T13:45:00Z') },
+    ];
+    expect(computeCapacity(slot, rooms, busy)[0].capacity).toBe(2);
+  });
+
+  it('different rooms booked in staggered fashion reduce capacity correctly', () => {
+    const busy: BusyInterval[] = [
+      { resourceId: 'r1', start: new Date('2026-07-01T12:45:00Z'), end: new Date('2026-07-01T13:15:00Z') }, // overlaps
+      { resourceId: 'r2', start: new Date('2026-07-01T13:20:00Z'), end: new Date('2026-07-01T13:50:00Z') }, // overlaps
+    ];
+    // r1 and r2 both taken (partial overlaps), r3 free → capacity 1.
+    expect(computeCapacity(slot, rooms, busy)[0].capacity).toBe(1);
+  });
+
+  it('a booking on a DIFFERENT day does not affect this slot', () => {
+    const busy: BusyInterval[] = [
+      { resourceId: 'r1', start: new Date('2026-07-02T13:00:00Z'), end: new Date('2026-07-02T13:30:00Z') },
+    ];
+    expect(computeCapacity(slot, rooms, busy)[0].capacity).toBe(3);
+  });
+});
+
+describe('multi-day range', () => {
+  const wedRule: WeeklyRule = { dayOfWeek: 3, startMinute: 540, endMinute: 1020 };
+  it('a 2-week range with a Wednesday-only rule yields exactly 2 windows', () => {
+    const w = expandRulesToWindows(
+      [wedRule], 'America/New_York',
+      new Date('2026-07-01T12:00:00Z'), // Wed Jul 1
+      new Date('2026-07-14T12:00:00Z'), // Tue Jul 14
+    );
+    expect(w).toHaveLength(2); // Jul 1 and Jul 8
+  });
+});
